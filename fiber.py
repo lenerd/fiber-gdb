@@ -275,26 +275,26 @@ class FiberMain(gdb.Command):
         super(FiberMain, self).__init__ ("fiber main", gdb.COMMAND_USER)
 
     def invoke (self, arg, from_tty):
-        original_frame = gdb.selected_frame()
-
+        argv = gdb.string_to_argv(arg)
+        if len(argv) not in [0, 1]:
+            print("usage: fiber main [bt | switch]")
+            return
         scheduler = Scheduler.find()
         if scheduler is None:
-            #  gdb.execute('regstash pop')
             return
-        regs = scheduler.get_main_ctx().get_fctx().read_registers()
+        ctx = scheduler.get_main_ctx()
+        ctx.print()
+        regs = ctx.get_fctx().read_registers()
         for reg, val in regs.items():
             print("{:3s}    {:s}".format(reg, val.format_string(format='x')))
 
-        gdb.execute('regstash push')
-        gdb.newest_frame().select()
-        for reg, val in regs.items():
-            write_register(reg, val)
+        if len(argv) == 0:
+            return
 
-        print("backtrace on main fiber:")
-        gdb.execute('bt')
-
-        gdb.execute('regstash pop')
-        original_frame.select()
+        if argv[0] == 'bt':
+            ctx.backtrace()
+        elif argv[0] == 'switch':
+            ctx.switch()
 
 
 class FiberScheduler(gdb.Command):
