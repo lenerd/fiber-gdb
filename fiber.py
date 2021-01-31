@@ -112,6 +112,10 @@ class Context:
     def is_ready(self):
         return self.ptr.dereference()['ready_hook_']['next_'] == 0
 
+    def is_resumable(self):
+        fun = gdb.parse_and_eval("boost::fibers::context::is_resumable")
+        return fun(self.ptr)    
+    
     def is_sleeping(self):
         raise NotImplementedError
 
@@ -217,6 +221,10 @@ class Scheduler:
     def get_remote_ready_queue(self):
         raise NotImplementedError
 
+    def has_ready_fibers(self):
+        fun = gdb.parse_and_eval("boost::fibers::scheduler::has_ready_fibers")
+        return fun(self.ptr)
+        
     @staticmethod
     def find():
         ctx = Context.find_active_context()
@@ -246,6 +254,8 @@ class Algorithm:
         vptr_s = str(vptr)
         if 'boost::fibers::algo::round_robin' in vptr_s:
             return RoundRobin(ptr)
+        elif 'boost::fibers::asio::round_robin' in vptr_s:
+            return AsioRoundRobin(ptr)
         else:
             print("unknown scheduling algorithm: {}".format(str(vptr_s)))
             return Algorithm(ptr)
@@ -260,6 +270,12 @@ class RoundRobin(Algorithm):
         t = gdb.lookup_type("'boost::fibers::algo::round_robin'").pointer()
         super().__init__(ptr.cast(t))
 
+class AsioRoundRobin(Algorithm):
+    """Representation of boost::fibers::asio::round_robin"""
+
+    def __init__(self, ptr):
+        t = gdb.lookup_type('boost::fibers::asio::round_robin').pointer()
+        super().__init__(ptr.cast(t))
 
 class Fiber(gdb.Command):
     """Collection of commands for Boost.Fiber"""
