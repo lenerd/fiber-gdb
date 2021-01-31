@@ -50,13 +50,13 @@ class Context:
 
     def __init__(self, ptr, raw=False):
         if raw:
-            ctx_p = gdb.lookup_type('boost::fibers::context').pointer()
+            ctx_p = gdb.lookup_type("boost::fibers::context").pointer()
             ptr = gdb.Value(ptr).cast(ctx_p)
         self.ptr = ptr
 
     @staticmethod
     def offset_of(member):
-        return int(gdb.parse_and_eval(f'&boost::fibers::context::{member}').format_string(format='x'), 0)
+        return int(gdb.parse_and_eval(f"&'boost::fibers::context'::{member}").format_string(format='x'), 0)
 
     @staticmethod
     def offset_of_remote_ready_hook():
@@ -84,7 +84,7 @@ class Context:
 
     @staticmethod
     def find_active_context():
-        ptr = gdb.parse_and_eval('boost::fibers::context::active()')
+        ptr = gdb.parse_and_eval("'boost::fibers::context::active'()")
         return Context(ptr)
 
     def get(self):
@@ -198,7 +198,7 @@ class Scheduler:
             node = node['next_']
         list_nodes.append(last_node)
         char_p = gdb.lookup_type('char').pointer()
-        context_p = gdb.lookup_type('boost::fibers::context').pointer()
+        context_p = gdb.lookup_type("boost::fibers::context").pointer()
         # worker_hook_ is at offset 184 in context
         # => pointer in worker_queue_ -184 to get context pointers
         fibers = [
@@ -257,7 +257,7 @@ class RoundRobin(Algorithm):
     """Representation of boost::fibers::algo::round_robin"""
 
     def __init__(self, ptr):
-        t = gdb.lookup_type('boost::fibers::algo::round_robin').pointer()
+        t = gdb.lookup_type("'boost::fibers::algo::round_robin'").pointer()
         super().__init__(ptr.cast(t))
 
 
@@ -275,26 +275,26 @@ class FiberMain(gdb.Command):
         super(FiberMain, self).__init__ ("fiber main", gdb.COMMAND_USER)
 
     def invoke (self, arg, from_tty):
-        original_frame = gdb.selected_frame()
-
+        argv = gdb.string_to_argv(arg)
+        if len(argv) not in [0, 1]:
+            print("usage: fiber main [bt | switch]")
+            return
         scheduler = Scheduler.find()
         if scheduler is None:
-            #  gdb.execute('regstash pop')
             return
-        regs = scheduler.get_main_ctx().get_fctx().read_registers()
+        ctx = scheduler.get_main_ctx()
+        ctx.print()
+        regs = ctx.get_fctx().read_registers()
         for reg, val in regs.items():
             print("{:3s}    {:s}".format(reg, val.format_string(format='x')))
 
-        gdb.execute('regstash push')
-        gdb.newest_frame().select()
-        for reg, val in regs.items():
-            write_register(reg, val)
+        if len(argv) == 0:
+            return
 
-        print("backtrace on main fiber:")
-        gdb.execute('bt')
-
-        gdb.execute('regstash pop')
-        original_frame.select()
+        if argv[0] == 'bt':
+            ctx.backtrace()
+        elif argv[0] == 'switch':
+            ctx.switch()
 
 
 class FiberScheduler(gdb.Command):
